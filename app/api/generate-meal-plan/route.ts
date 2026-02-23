@@ -5,30 +5,18 @@ export async function POST(req: Request) {
     const { clientProfile } = await req.json();
 
     const response = await fetch(
-      "https://api.openai.com/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: "gpt-4o-mini",
-          messages: [
-            {
-              role: "user",
-              content: `
-Create a 7-day meal plan in valid JSON only.
+  "https:/ai-backend-pp4s4np4z-jamies-projects-ffb1e526.vercel.app/api/generate-meal-plan",
+  {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ clientProfile }),
+  }
+);
 
-Client Data:
-${JSON.stringify(clientProfile)}
-              `,
-            },
-          ],
-          temperature: 0.7,
-        }),
-      }
-    );
+const text = await response.text();
+
+console.log("RAW SERVER RESPONSE:", text);
+
 
     const data = await response.json();
     const content = data.choices[0].message.content;
