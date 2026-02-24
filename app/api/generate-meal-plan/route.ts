@@ -3,7 +3,6 @@ import { NextResponse } from "next/server";
 function calculateCalories(client: any) {
   const { weight, height, age, gender, activity, goal } = client;
 
-  // Mifflin-St Jeor
   let bmr;
 
   if (gender === "female") {
@@ -22,7 +21,6 @@ function calculateCalories(client: any) {
 
   const tdee = bmr * (activityMultipliers[activity] || 1.55);
 
-  // Goal adjustment
   let calories = tdee;
 
   if (goal === "fat_loss") calories -= 400;
@@ -32,19 +30,23 @@ function calculateCalories(client: any) {
 }
 
 function calculateMacros(calories: number, weight: number) {
-  // Protein: 0.8–1g per lb (we’ll use 1g per lb)
   const protein = Math.round(weight * 1);
-
-  // Fat: 25% of calories
   const fat = Math.round((calories * 0.25) / 9);
 
-  // Carbs: remaining calories
   const remainingCalories =
     calories - (protein * 4 + fat * 9);
 
   const carbs = Math.round(remainingCalories / 4);
 
   return { protein, carbs, fat };
+}
+
+/* 🧹 SAFE JSON CLEANER */
+function cleanJson(content: string) {
+  return content
+    .replace(/```json/g, "")
+    .replace(/```/g, "")
+    .trim();
 }
 
 export async function POST(req: Request) {
@@ -58,7 +60,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // 🔥 SERVER CALCULATIONS
     const calories = calculateCalories(clientProfile);
     const { protein, carbs, fat } = calculateMacros(
       calories,
@@ -72,7 +73,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // AI ONLY BUILDS MEAL PLAN
     const openaiResponse = await fetch(
       "https://api.openai.com/v1/chat/completions",
       {
@@ -88,13 +88,17 @@ export async function POST(req: Request) {
               role: "system",
               content: `
 You are a professional nutritionist.
-Create a 7-day meal plan that EXACTLY matches these macros.
 Return ONLY valid JSON.
+No explanations.
+No markdown.
+No backticks.
               `,
             },
             {
               role: "user",
               content: `
+Create a 7-day meal plan.
+
 Calories: ${calories}
 Protein: ${protein}
 Carbs: ${carbs}
@@ -119,14 +123,30 @@ ${JSON.stringify(clientProfile)}
       );
     }
 
-    const content = data.choices?.[0]?.message?.content;
+    let content = data.choices?.[0]?.message?.content || "";
+
+    content = cleanJson(content);
+
+    let mealPlan;
+
+    try {
+      mealPlan = JSON.parse(content);
+    } catch {
+      return NextResponse.json(
+        {
+          error: "AI returned invalid JSON",
+          raw: content,
+        },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({
       calories,
       protein,
       carbs,
       fat,
-      mealPlan: JSON.parse(content),
+      mealPlan,
     });
 
   } catch (error: any) {
