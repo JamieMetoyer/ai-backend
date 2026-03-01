@@ -14,7 +14,7 @@ export async function POST(req: Request) {
     }
 
     /* =======================================================
-       1️⃣ TRY OPEN FOOD FACTS FIRST
+       1️⃣ OPEN FOOD FACTS
     ======================================================= */
 
     try {
@@ -28,22 +28,37 @@ export async function POST(req: Request) {
         const product = offData.product;
         const nutriments = product.nutriments || {};
 
+        // Calories handling (kcal or kJ)
+        let calories = 0;
+
+        if (nutriments["energy-kcal_100g"]) {
+          calories = Number(nutriments["energy-kcal_100g"]);
+        } else if (nutriments["energy_100g"]) {
+          // Convert kJ → kcal
+          calories = Number(nutriments["energy_100g"]) / 4.184;
+        }
+
         return NextResponse.json({
           source: "openfoodfacts",
           name: product.product_name || "Unknown Food",
           brand: product.brands || "",
-          calories: Math.round(nutriments["energy-kcal_100g"] || 0),
-          protein: Number(nutriments.proteins_100g || 0),
-          carbs: Number(nutriments.carbohydrates_100g || 0),
-          fat: Number(nutriments.fat_100g || 0),
+          per100g: {
+            calories: Math.round(calories || 0),
+            protein: Number(nutriments.proteins_100g || 0),
+            carbs: Number(nutriments.carbohydrates_100g || 0),
+            fat: Number(nutriments.fat_100g || 0),
+            fiber: Number(nutriments.fiber_100g || 0),
+            sugar: Number(nutriments.sugars_100g || 0),
+            sodium: Number(nutriments.sodium_100g || 0),
+          },
         });
       }
     } catch (err) {
-      console.log("OpenFoodFacts failed, falling back to USDA");
+      console.log("OpenFoodFacts failed, trying USDA...");
     }
 
     /* =======================================================
-       2️⃣ FALLBACK TO USDA
+       2️⃣ USDA FALLBACK
     ======================================================= */
 
     if (!USDA_KEY) {
@@ -75,23 +90,33 @@ export async function POST(req: Request) {
     }
 
     const food = usdaData.foods[0];
-
     const nutrients = food.foodNutrients || [];
 
-    const getNutrient = (name: string) =>
-      nutrients.find((n: any) => n.nutrientName === name)?.value || 0;
+    // Flexible nutrient matcher
+    const getNutrient = (keyword: string) => {
+      const match = nutrients.find((n: any) =>
+        n.nutrientName?.toLowerCase().includes(keyword.toLowerCase())
+      );
+      return match?.value || 0;
+    };
 
     return NextResponse.json({
       source: "usda",
       name: food.description || "Unknown Food",
       brand: food.brandOwner || "",
-      calories: Math.round(getNutrient("Energy")),
-      protein: Number(getNutrient("Protein")),
-      carbs: Number(getNutrient("Carbohydrate, by difference")),
-      fat: Number(getNutrient("Total lipid (fat)")),
+      per100g: {
+        calories: getNutrient("energy"),
+        protein: getNutrient("protein"),
+        carbs: getNutrient("carbohydrate"),
+        fat: getNutrient("lipid"),
+        fiber: getNutrient("fiber"),
+        sugar: getNutrient("sugar"),
+        sodium: getNutrient("sodium"),
+      },
     });
+
   } catch (error) {
-    console.error("Hybrid barcode lookup error:", error);
+    console.error("Barcode lookup error:", error);
 
     return NextResponse.json(
       { error: "Server error" },
