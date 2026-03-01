@@ -13,9 +13,7 @@ export async function POST(req: Request) {
       );
     }
 
-    /* =======================================================
-       1️⃣ OPEN FOOD FACTS
-    ======================================================= */
+    /* ================= OPEN FOOD FACTS ================= */
 
     try {
       const offRes = await fetch(
@@ -26,16 +24,14 @@ export async function POST(req: Request) {
 
       if (offData.status === 1) {
         const product = offData.product;
-        const nutriments = product.nutriments || {};
+        const n = product.nutriments || {};
 
-        // Calories handling (kcal or kJ)
         let calories = 0;
 
-        if (nutriments["energy-kcal_100g"]) {
-          calories = Number(nutriments["energy-kcal_100g"]);
-        } else if (nutriments["energy_100g"]) {
-          // Convert kJ → kcal
-          calories = Number(nutriments["energy_100g"]) / 4.184;
+        if (n["energy-kcal_100g"]) {
+          calories = Number(n["energy-kcal_100g"]);
+        } else if (n["energy_100g"]) {
+          calories = Number(n["energy_100g"]) / 4.184;
         }
 
         return NextResponse.json({
@@ -44,22 +40,31 @@ export async function POST(req: Request) {
           brand: product.brands || "",
           per100g: {
             calories: Math.round(calories || 0),
-            protein: Number(nutriments.proteins_100g || 0),
-            carbs: Number(nutriments.carbohydrates_100g || 0),
-            fat: Number(nutriments.fat_100g || 0),
-            fiber: Number(nutriments.fiber_100g || 0),
-            sugar: Number(nutriments.sugars_100g || 0),
-            sodium: Number(nutriments.sodium_100g || 0),
+            protein: Number(n.proteins_100g || 0),
+            carbs: Number(n.carbohydrates_100g || 0),
+            fat: Number(n.fat_100g || 0),
+
+            saturatedFat: Number(n["saturated-fat_100g"] || 0),
+            transFat: Number(n["trans-fat_100g"] || 0),
+            cholesterol: Number(n["cholesterol_100g"] || 0),
+
+            fiber: Number(n.fiber_100g || 0),
+            sugar: Number(n.sugars_100g || 0),
+            addedSugar: Number(n["added-sugars_100g"] || 0),
+
+            vitaminD: Number(n["vitamin-d_100g"] || 0),
+            calcium: Number(n["calcium_100g"] || 0),
+            iron: Number(n["iron_100g"] || 0),
+            potassium: Number(n["potassium_100g"] || 0),
+            sodium: Number(n.sodium_100g || 0),
           },
         });
       }
     } catch (err) {
-      console.log("OpenFoodFacts failed, trying USDA...");
+      console.log("OFF failed, trying USDA...");
     }
 
-    /* =======================================================
-       2️⃣ USDA FALLBACK
-    ======================================================= */
+    /* ================= USDA ================= */
 
     if (!USDA_KEY) {
       return NextResponse.json(
@@ -92,7 +97,6 @@ export async function POST(req: Request) {
     const food = usdaData.foods[0];
     const nutrients = food.foodNutrients || [];
 
-    // Flexible nutrient matcher
     const getNutrient = (keyword: string) => {
       const match = nutrients.find((n: any) =>
         n.nutrientName?.toLowerCase().includes(keyword.toLowerCase())
@@ -109,8 +113,19 @@ export async function POST(req: Request) {
         protein: getNutrient("protein"),
         carbs: getNutrient("carbohydrate"),
         fat: getNutrient("lipid"),
+
+        saturatedFat: getNutrient("saturated"),
+        transFat: getNutrient("trans"),
+        cholesterol: getNutrient("cholesterol"),
+
         fiber: getNutrient("fiber"),
         sugar: getNutrient("sugar"),
+        addedSugar: getNutrient("added"),
+
+        vitaminD: getNutrient("vitamin d"),
+        calcium: getNutrient("calcium"),
+        iron: getNutrient("iron"),
+        potassium: getNutrient("potassium"),
         sodium: getNutrient("sodium"),
       },
     });
